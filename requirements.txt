@@ -1,0 +1,11 @@
+requests
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+tensorflow
+schedule
+flask
+gunicorn
+python-telegram-bot==13.15
