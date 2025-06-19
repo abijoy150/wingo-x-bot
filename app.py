@@ -1,73 +1,51 @@
-# app.py
-
-import time
+from flask import Flask
 import threading
-from scraper.scraper import fetch_latest_result
-from model.predict_model import predict_next
-from utils.accuracy import log_prediction, get_accuracy
-from telegram.telegram_bot import send_message, format_result, format_prediction, format_accuracy
-from utils.dashboard import run_dashboard
-from scheduler.retrain import start_scheduler
-import pandas as pd
-import os
+import time
+from scraper import fetch_latest_result
+from model.predictor import predict_next_result
+from telegram.bot import send_prediction
+from scheduler.auto_train import schedule_daily_training
 
-RESULT_LOG = "result_log.csv"
+app = Flask(__name__)
 
-def save_result(result):
-    # CSV তে রেজাল্ট লগ করা
-    if not os.path.exists(RESULT_LOG):
-        df = pd.DataFrame(columns=["period", "number", "color", "size", "timestamp"])
-        df.to_csv(RESULT_LOG, index=False)
-    df = pd.read_csv(RESULT_LOG)
-    if result['period'] not in df['period'].values:
-        df = df.append(result, ignore_index=True)
-        df.to_csv(RESULT_LOG, index=False)
-
-def main_loop():
-    last_period = None
+# =================== MAIN LOOP ===================
+def start_prediction_loop():
+    last_checked_period = None
     while True:
-        result = fetch_latest_result()
-        if result and result['period'] != last_period:
-            last_period = result['period']
-            save_result(result)
-
-            predicted_number = predict_next()
-            if predicted_number is None:
-                send_message("❌ Prediction model not ready.")
-                time.sleep(30)
+        try:
+            latest_result = fetch_latest_result()
+            if not latest_result:
+                print("❌ ফলাফল পাওয়া যায়নি, আবার চেষ্টা করছি...")
+                time.sleep(5)
                 continue
 
-            # Accuracy log update
-            log_prediction(result['period'], predicted_number, result['number'])
+            period = latest_result['period']
+            number = latest_result['number']
 
-            # Send Telegram messages
-            send_message(format_result(result))
-            send_message(format_prediction(predicted_number))
+            if period != last_checked_period:
+                prediction = predict_next_result()
+                send_prediction(period, prediction)
+                last_checked_period = period
+                print(f"✅ নতুন ভবিষ্যদ্বাণী পাঠানো হয়েছে: {period}")
+            else:
+                print("⏳ এখনো নতুন রাউন্ড আসেনি...")
 
-            total, correct = get_accuracy()
-            send_message(format_accuracy(total, correct))
+        except Exception as e:
+            print(f"❗ Loop error: {str(e)}")
 
-        time.sleep(30)  # ৩০ সেকেন্ড পর পর চেক করবে
+        time.sleep(15)
 
-def start_bot():
-    bot_thread = threading.Thread(target=main_loop)
-    bot_thread.daemon = True
-    bot_thread.start()
+# =================== START ===================
+@app.route('/')
+def home():
+    return "🚀 Wingo Prediction Bot is Running!"
 
-def start_dashboard_server():
-    dash_thread = threading.Thread(target=run_dashboard)
-    dash_thread.daemon = True
-    dash_thread.start()
+def run_bot():
+    loop_thread = threading.Thread(target=start_prediction_loop)
+    loop_thread.start()
 
-def start_retrain_scheduler():
-    scheduler_thread = threading.Thread(target=start_scheduler)
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
-
-if __name__ == "__main__":
-    send_message("🤖 Wingo Prediction Bot Started.")
-    start_bot()
-    start_dashboard_server()
-    start_retrain_scheduler()
-    while True:
-        time.sleep(1)
+# =================== MAIN ===================
+if __name__ == '__main__':
+    run_bot()
+    schedule_daily_training()
+    app.run(host='0.0.0.0', port=10000)
