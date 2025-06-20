@@ -2,13 +2,12 @@ from flask import Flask
 import threading
 import time
 from scraper import fetch_latest_result
-from model.predictor import predict_next_result
+from model import predict_next_result
 from telegram.bot import send_prediction
 from scheduler.auto_train import schedule_daily_training
 
 app = Flask(__name__)
 
-# =================== MAIN LOOP ===================
 def start_prediction_loop():
     last_checked_period = None
     while True:
@@ -35,7 +34,6 @@ def start_prediction_loop():
 
         time.sleep(15)
 
-# =================== START ===================
 @app.route('/')
 def home():
     return "🚀 Wingo Prediction Bot is Running!"
@@ -44,7 +42,6 @@ def run_bot():
     loop_thread = threading.Thread(target=start_prediction_loop)
     loop_thread.start()
 
-# =================== MAIN ===================
 if __name__ == '__main__':
     run_bot()
     schedule_daily_training()
